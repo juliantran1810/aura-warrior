@@ -26,6 +26,10 @@ export const GLOBALS = {
     projectiles: [],
     particles: [],
     texts: [],
+    slashes: [],
+    impactRings: [],
+    pillars: [],
+    afterimages: [],
     
     resize: function() {
         this.width = window.innerWidth;

@@ -90,6 +90,12 @@ export const CharacterRenderer = {
         else if (char.state === 'jump') { legRot = 0.5; armRot = -0.8; }
         else if (char.state === 'charge' || char.state === 'powerup') { bobY = 2; legRot = 0.5; armRot = -0.5; }
         else if (char.state === 'dead') { ctx.rotate(Math.PI / 2); ctx.translate(-char.height / 2 + 10, -char.width / 2); }
+        else if (char.state === 'attack') {
+            let step = char.comboStep || 1;
+            if (step === 1) { legRot = -0.25; armRot = 0.7; }
+            else if (step === 2) { legRot = 1.35; armRot = -0.5; bobY = 2; } // Roundhouse Kick Pose
+            else if (step === 3) { legRot = -0.4; armRot = -1.4; bobY = -8; } // Dragon Uppercut Rising Pose
+        }
 
         const headS = 22, bodyW = 20, bodyH = 18, limbW = 8, limbH = 15;
         let waistY = -24; 
@@ -97,32 +103,73 @@ export const CharacterRenderer = {
         let cSkin = char.colors.skin;
         let cPants = char.colors.outfit;
         let cAccent = char.colors.accent || '#000';
-        let isSuper = (char.skillActive && char.raceKey === 'sayan') || (char.powerUpActive && char.raceKey === 'sayan');
+        let isSuper = char.isTransformed || (char.skillActive && char.raceKey === 'sayan') || (char.powerUpActive && char.raceKey === 'sayan');
         let cHair = isSuper ? '#ffe082' : char.colors.hair;
 
-        // 1. KẾT XUẤT HÀO QUANG AURA DẠNG NGỌN LỬA ANIME VÀ TIA SÉT
-        if ((char.raceKey !== undefined && !char.isDead && (char.state === 'attack' || char.state === 'shoot' || char.skillActive || char.powerUpActive || char.isChargingKame || char.isChargingPower)) && char.state !== 'dummy') {
+        // 1. KẾT XUẤT HÀO QUANG AURA DẠNG NGỌN LỬA ANIME VÀ TIA SÉT BỘC PHÁ
+        if ((char.raceKey !== undefined && !char.isDead && (isSuper || char.state === 'attack' || char.state === 'shoot' || char.skillActive || char.powerUpActive || char.isChargingKame || char.isChargingPower)) && char.state !== 'dummy') {
             ctx.save();
-            let auraSize = (char.skillActive || char.powerUpActive || char.isChargingKame || char.isChargingPower) ? (char.raceKey === 'sayan' ? 75 : 55) : 38;
-            let pulse = Math.floor(Math.sin(time / 40) * 6);
+            let auraSize = (isSuper || char.skillActive || char.powerUpActive || char.isChargingKame || char.isChargingPower) ? (isSuper ? 85 : 55) : 38;
+            let pulse = Math.floor(Math.sin(time / 30) * 8);
             
             let auraColor = char.colors.aura;
-            if (char.isChargingKame) auraColor = 'rgba(0, 229, 255, 0.45)';
-            else if (char.isChargingPower) auraColor = 'rgba(171, 71, 188, 0.45)';
-            else if (isSuper) auraColor = 'rgba(255, 235, 59, 0.55)';
+            if (char.isChargingKame) auraColor = 'rgba(0, 229, 255, 0.55)';
+            else if (char.isChargingPower) auraColor = 'rgba(171, 71, 188, 0.55)';
+            else if (isSuper) auraColor = 'rgba(255, 215, 0, 0.65)';
 
             // Lớp Aura ngoạn mục 2 tầng (Glow + Flame Core)
             ctx.beginPath();
-            ctx.moveTo(0, waistY - bodyH - headS - 14 - pulse);
-            ctx.quadraticCurveTo(auraSize + 10, waistY - bodyH, 0, 12);
-            ctx.quadraticCurveTo(-auraSize - 10, waistY - bodyH, 0, waistY - bodyH - headS - 14 - pulse);
+            ctx.moveTo(0, waistY - bodyH - headS - 18 - pulse);
+            ctx.quadraticCurveTo(auraSize + 12, waistY - bodyH, 0, 16);
+            ctx.quadraticCurveTo(-auraSize - 12, waistY - bodyH, 0, waistY - bodyH - headS - 18 - pulse);
             ctx.fillStyle = auraColor; ctx.fill();
+
+            if (isSuper) {
+                // Lớp ngọn lửa Vàng Kim Đỏ Lửa siêu linh thiêng
+                ctx.beginPath();
+                ctx.moveTo(0, waistY - bodyH - headS - 10 - pulse * 0.6);
+                ctx.quadraticCurveTo(auraSize * 0.65, waistY - bodyH, 0, 10);
+                ctx.quadraticCurveTo(-auraSize * 0.65, waistY - bodyH, 0, waistY - bodyH - headS - 10 - pulse * 0.6);
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.5)'; ctx.fill();
+            }
 
             // Sét điện bộc phá năng lượng
             if (isSuper || char.isChargingKame || char.isChargingPower) {
-                this.drawElectricSparks(ctx, 0, waistY - bodyH, 35, time);
-                this.drawElectricSparks(ctx, 0, waistY - bodyH - headS, 30, time + 100);
+                this.drawElectricSparks(ctx, 0, waistY - bodyH, 40, time);
+                this.drawElectricSparks(ctx, 0, waistY - bodyH - headS, 35, time + 100);
             }
+            ctx.restore();
+        }
+
+        // Quả Cầu Kame Xoáy Chói Lóa ở Tay khi Gồng
+        if (char.isChargingKame) {
+            ctx.save();
+            let orbX = -bodyW / 2 - 12;
+            let orbY = waistY - bodyH / 2 + bobY;
+            let pulse = Math.sin(time / 30) * 5;
+            let radius = 18 + pulse;
+
+            ctx.beginPath();
+            ctx.arc(orbX, orbY, radius + 10, 0, Math.PI * 2);
+            ctx.fillStyle = 'rgba(0, 229, 255, 0.35)';
+            ctx.fill();
+
+            ctx.beginPath();
+            ctx.arc(orbX, orbY, radius, 0, Math.PI * 2);
+            ctx.fillStyle = '#00bcd4';
+            ctx.fill();
+
+            ctx.beginPath();
+            ctx.arc(orbX, orbY, radius * 0.6, 0, Math.PI * 2);
+            ctx.fillStyle = '#ffffff';
+            ctx.fill();
+
+            ctx.strokeStyle = '#ffffff';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.ellipse(orbX, orbY, radius + 5, (radius + 5) * 0.35, time / 70, 0, Math.PI * 2);
+            ctx.stroke();
+
             ctx.restore();
         }
 
@@ -173,10 +220,15 @@ export const CharacterRenderer = {
         ctx.lineTo(2, waistY + 4 + bobY);
         ctx.fill(); ctx.stroke();
 
-        // Tay trước
+        // Tay trước với tư thế đấm/đá/chưởng linh hoạt theo Combo Step
         let frontArmRot = -armRot;
-        if (char.state === 'attack' || char.state === 'shoot') frontArmRot = -Math.PI / 1.4;
-        if (char.state === 'charge' || char.state === 'powerup') frontArmRot = -Math.PI / 3.5; 
+        if (char.state === 'attack') {
+            let step = char.comboStep || 1;
+            if (step === 1) frontArmRot = -Math.PI / 1.5; // Thẳng tay đấm Jab
+            else if (step === 2) frontArmRot = Math.PI / 3; // Co tay phòng thủ khi ra đòn đá
+            else if (step === 3) frontArmRot = -Math.PI * 0.92; // Đấm bộc phá Dragon Uppercut chỉ trời
+        } else if (char.state === 'shoot') frontArmRot = -Math.PI / 1.4;
+        else if (char.state === 'charge' || char.state === 'powerup') frontArmRot = -Math.PI / 3.5; 
         this.drawLimb(ctx, bodyW/2 - 2, waistY - bodyH + 2 + bobY, limbW, limbH, frontArmRot, cSkin, cAccent, false);
 
         // 3. ĐẦU & NÉT MẶT ANIME CHI TIẾT

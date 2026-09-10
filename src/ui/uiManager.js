@@ -3,6 +3,7 @@
    ========================================================================= */
 import { GLOBALS } from '../config/globals.js';
 import { ITEMS_DB, RARITY_COLORS } from '../config/config.js';
+import { QuestSystem } from '../systems/questSystem.js';
 
 export const UI = {
     updateHUD: function() {
@@ -48,13 +49,7 @@ export const UI = {
     },
 
     updateQuest: function() {
-        let p = GLOBALS.player; if (!p) return;
-        let q = p.quest; let txt = document.getElementById('questText');
-        if (!txt) return;
-        if (q.step === 0) txt.innerText = 'Nói chuyện Trưởng Làng';
-        else if (q.step === 1) txt.innerText = `Diệt Quái: ${q.progress}/${q.target}`;
-        else if (q.step === 2) txt.innerText = 'Về báo cáo';
-        else txt.innerText = 'Đã xong nhiệm vụ';
+        QuestSystem.updateUI();
     },
 
     chatSys: function(msg) {
@@ -132,6 +127,15 @@ export const UI = {
         else {
             eq.style.display = 'block';
             this.updateEquipmentUI();
+        }
+    },
+
+    toggleQuestJournal: function() {
+        let qj = document.getElementById('questJournal'); if (!qj) return;
+        if (qj.style.display === 'block') qj.style.display = 'none';
+        else {
+            qj.style.display = 'block';
+            QuestSystem.updateUI();
         }
     },
 

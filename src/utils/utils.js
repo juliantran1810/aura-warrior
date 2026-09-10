@@ -33,6 +33,41 @@ export const Utils = {
         }
     },
 
+    spawnSlashArc: (x, y, dir, color = '#ffca28', scale = 1, step = 1) => {
+        if (!GLOBALS.slashes) GLOBALS.slashes = [];
+        GLOBALS.slashes.push({
+            x, y, dir, color, scale, step,
+            life: 12, maxLife: 12,
+            angle: step === 1 ? -0.2 : (step === 2 ? 0.4 : -0.7)
+        });
+    },
+
+    spawnImpactBurst: (x, y, color = '#ffeb3b') => {
+        Utils.spawnParticles(x, y, color, 20);
+        Utils.spawnParticles(x, y, '#ff5722', 15);
+        if (!GLOBALS.impactRings) GLOBALS.impactRings = [];
+        GLOBALS.impactRings.push({ x, y, radius: 4, maxRadius: 36, color, life: 10, maxLife: 10 });
+    },
+
+    spawnEnergyPillar: (x, y, color = '#ffeb3b', width = 70) => {
+        if (!GLOBALS.pillars) GLOBALS.pillars = [];
+        GLOBALS.pillars.push({
+            x, y, width, color,
+            life: 30, maxLife: 30
+        });
+        Utils.spawnParticles(x, y, color, 40);
+        Utils.spawnParticles(x, y - 50, '#ffffff', 30);
+    },
+
+    spawnAfterimage: (char) => {
+        if (!GLOBALS.afterimages) GLOBALS.afterimages = [];
+        GLOBALS.afterimages.push({
+            x: char.x, y: char.y, width: char.width, height: char.height,
+            dir: char.dir, state: char.state, raceKey: char.raceKey, colors: char.colors,
+            life: 15, maxLife: 15
+        });
+    },
+
     screenShake: (intensity, time) => {
         GLOBALS.camera.shakeIntensity = intensity;
         GLOBALS.camera.shakeTime = time;

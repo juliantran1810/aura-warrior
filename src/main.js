@@ -5,6 +5,7 @@ import { GLOBALS } from './config/globals.js';
 import { CONFIG } from './config/config.js';
 import { Utils } from './utils/utils.js';
 import { AnimationManager } from './renderers/animationManager.js';
+import { CharacterRenderer } from './renderers/characterRenderer.js';
 import { PreviewRenderer } from './renderers/previewRenderer.js';
 import { EnvironmentSystem } from './systems/environmentSystem.js';
 import { MapManager } from './systems/mapManager.js';
@@ -31,29 +32,14 @@ export const GameCore = {
                 const inventory = document.getElementById('inventory');
                 const equipment = document.getElementById('equipment');
 
-                const isDonateOpen = donateScreen && donateScreen.style.display === 'flex';
-                const isInventoryOpen = inventory && inventory.style.display === 'block';
-                const isEquipmentOpen = equipment && equipment.style.display === 'block';
+                const questJournal = document.getElementById('questJournal');
+                const isQuestJournalOpen = questJournal && questJournal.style.display === 'block';
 
-                // 1. Nếu Donate Modal đang mở -> Đóng Donate
-                if (isDonateOpen) {
-                    UI.hideDonate();
-                    return;
-                }
+                if (isDonateOpen) { UI.hideDonate(); return; }
+                if (isInventoryOpen) { UI.toggleInventory(); return; }
+                if (isEquipmentOpen) { UI.toggleEquipment(); return; }
+                if (isQuestJournalOpen) { UI.toggleQuestJournal(); return; }
 
-                // 2. Nếu Inventory đang mở -> Đóng Inventory
-                if (isInventoryOpen) {
-                    UI.toggleInventory();
-                    return;
-                }
-
-                // 3. Nếu Equipment đang mở -> Đóng Equipment
-                if (isEquipmentOpen) {
-                    UI.toggleEquipment();
-                    return;
-                }
-
-                // 3. Nếu không có modal nào mở và đang Play -> Bật/Tắt Menu Tạm dừng
                 if (GLOBALS.state === 'PLAYING') {
                     this.togglePause();
                 }
@@ -113,6 +99,7 @@ export const GameCore = {
             }
             if (e.code === 'KeyI') UI.toggleInventory();
             if (e.code === 'KeyC') UI.toggleEquipment();
+            if (e.code === 'KeyN') UI.toggleQuestJournal();
         });
 
         window.addEventListener('keyup', e => GLOBALS.keys[e.code] = false);
@@ -340,6 +327,30 @@ export const GameCore = {
             GLOBALS.projectiles.forEach(p => p.update(actualDt));
             GLOBALS.particles = GLOBALS.particles.filter(p => p.life > 0);
             GLOBALS.particles.forEach(p => { p.x += p.vx; p.y += p.vy; p.life--; p.vy += CONFIG.gravity * 0.2; });
+            
+            if (!GLOBALS.slashes) GLOBALS.slashes = [];
+            GLOBALS.slashes = GLOBALS.slashes.filter(s => s.life > 0);
+            GLOBALS.slashes.forEach(s => { s.life--; });
+
+            if (!GLOBALS.impactRings) GLOBALS.impactRings = [];
+            GLOBALS.impactRings = GLOBALS.impactRings.filter(r => r.life > 0);
+            GLOBALS.impactRings.forEach(r => {
+                r.life--;
+                r.radius += (r.maxRadius - r.radius) * 0.3;
+            });
+
+            if (!GLOBALS.afterimages) GLOBALS.afterimages = [];
+            GLOBALS.afterimages = GLOBALS.afterimages.filter(a => a.life > 0);
+            GLOBALS.afterimages.forEach(a => a.life--);
+
+            if (GLOBALS.player && GLOBALS.player.isTransformed && Math.abs(GLOBALS.player.vx) > 1.5 && Math.random() < 0.4) {
+                Utils.spawnAfterimage(GLOBALS.player);
+            }
+
+            if (!GLOBALS.pillars) GLOBALS.pillars = [];
+            GLOBALS.pillars = GLOBALS.pillars.filter(pil => pil.life > 0);
+            GLOBALS.pillars.forEach(pil => pil.life--);
+
             GLOBALS.texts = GLOBALS.texts.filter(t => t.life > 0);
             GLOBALS.texts.forEach(t => { t.y += t.vy; t.life--; if (t.isCrit) t.vy *= 0.9; });
             if (GLOBALS.network) GLOBALS.network.update(actualDt);
@@ -387,8 +398,72 @@ export const GameCore = {
             }
         });
 
+        // Vẽ Bóng Ma Động Tốc Độ Cao (Super Saiyan Afterimage Ghosts)
+        if (GLOBALS.afterimages) {
+            GLOBALS.afterimages.forEach(a => {
+                GLOBALS.ctx.save();
+                GLOBALS.ctx.globalAlpha = (a.life / a.maxLife) * 0.4;
+                CharacterRenderer.draw(GLOBALS.ctx, a);
+                GLOBALS.ctx.restore();
+            });
+        }
+
         GLOBALS.entities.sort((a,b) => a.y - b.y).forEach(e => e.draw(GLOBALS.ctx));
         GLOBALS.projectiles.forEach(p => p.draw(GLOBALS.ctx));
+
+        // Vẽ Cột Năng Lượng Biến Hình Khổng Lồ (Ascending Transformation Light Pillars)
+        if (GLOBALS.pillars) {
+            GLOBALS.pillars.forEach(pil => {
+                GLOBALS.ctx.save();
+                let alpha = pil.life / pil.maxLife;
+                GLOBALS.ctx.globalAlpha = alpha;
+                let pillarGrad = GLOBALS.ctx.createLinearGradient(pil.x, 0, pil.x, GLOBALS.height);
+                pillarGrad.addColorStop(0, 'rgba(255, 255, 255, 0.95)');
+                pillarGrad.addColorStop(0.5, pil.color);
+                pillarGrad.addColorStop(1, 'rgba(255, 255, 255, 0)');
+                
+                GLOBALS.ctx.fillStyle = pillarGrad;
+                GLOBALS.ctx.shadowColor = pil.color;
+                GLOBALS.ctx.shadowBlur = 35;
+                GLOBALS.ctx.fillRect(pil.x - pil.width / 2, 0, pil.width, GLOBALS.height);
+                GLOBALS.ctx.restore();
+            });
+        }
+
+        // Vẽ Vệt Võ Thuật Crescent Slash Arcs
+        if (GLOBALS.slashes) {
+            GLOBALS.slashes.forEach(s => {
+                GLOBALS.ctx.save();
+                GLOBALS.ctx.translate(s.x, s.y);
+                GLOBALS.ctx.scale(s.dir, 1);
+                GLOBALS.ctx.rotate(s.angle);
+                GLOBALS.ctx.globalAlpha = s.life / s.maxLife;
+                GLOBALS.ctx.strokeStyle = s.color;
+                GLOBALS.ctx.lineWidth = 4 * s.scale;
+                GLOBALS.ctx.shadowColor = s.color;
+                GLOBALS.ctx.shadowBlur = 12;
+                GLOBALS.ctx.beginPath();
+                GLOBALS.ctx.arc(0, 0, 24 * s.scale, -Math.PI / 2.5, Math.PI / 2.5);
+                GLOBALS.ctx.stroke();
+                GLOBALS.ctx.restore();
+            });
+        }
+
+        // Vẽ Vòng Sóng Xung Kích Impact Rings
+        if (GLOBALS.impactRings) {
+            GLOBALS.impactRings.forEach(r => {
+                GLOBALS.ctx.save();
+                GLOBALS.ctx.globalAlpha = r.life / r.maxLife;
+                GLOBALS.ctx.strokeStyle = r.color;
+                GLOBALS.ctx.lineWidth = 3;
+                GLOBALS.ctx.shadowColor = r.color;
+                GLOBALS.ctx.shadowBlur = 10;
+                GLOBALS.ctx.beginPath();
+                GLOBALS.ctx.arc(r.x, r.y, r.radius, 0, Math.PI * 2);
+                GLOBALS.ctx.stroke();
+                GLOBALS.ctx.restore();
+            });
+        }
         
         EnvironmentSystem.drawParticles(GLOBALS.ctx, GLOBALS.camera.x, GLOBALS.camera.y);
 
@@ -411,7 +486,35 @@ export const GameCore = {
         });
         
         GLOBALS.ctx.restore();
-        GLOBALS.ctx.restore(); 
+
+        // Hiển thị Khung Combo HUD trên màn hình
+        if (GLOBALS.player && GLOBALS.player.comboCount > 1 && GLOBALS.player.comboTimer > 0) {
+            GLOBALS.ctx.save();
+            let count = GLOBALS.player.comboCount;
+            let scale = 1 + Math.sin(Date.now() / 80) * 0.08;
+            let comboColor = count >= 10 ? '#e040fb' : (count >= 5 ? '#ffca28' : '#00e5ff');
+            
+            GLOBALS.ctx.font = '900 26px "Roboto", sans-serif';
+            GLOBALS.ctx.textAlign = 'left';
+            GLOBALS.ctx.fillStyle = comboColor;
+            GLOBALS.ctx.shadowColor = comboColor;
+            GLOBALS.ctx.shadowBlur = 16;
+            
+            let posX = 16;
+            let posY = 175;
+            GLOBALS.ctx.translate(posX, posY);
+            GLOBALS.ctx.scale(scale, scale);
+            
+            GLOBALS.ctx.fillText(`🔥 ${count} HITS COMBO!`, 0, 0);
+            
+            GLOBALS.ctx.font = '900 12px "Roboto", sans-serif';
+            GLOBALS.ctx.fillStyle = '#ffffff';
+            let rankText = count >= 15 ? 'SUPER SAIYAN GOD!' : (count >= 10 ? 'EXCELLENT STRIKE!' : (count >= 5 ? 'GREAT COMBO!' : 'COMBO CHAIN'));
+            GLOBALS.ctx.fillText(rankText, 0, 16);
+            GLOBALS.ctx.restore();
+        }
+
+        GLOBALS.ctx.restore();  
         
         if (GLOBALS.player && GLOBALS.player.isDead && !GLOBALS.isPaused) UI.updateHUD(); 
         requestAnimationFrame(this.loop.bind(this));

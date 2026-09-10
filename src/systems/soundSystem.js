@@ -60,8 +60,8 @@ export const SoundSystem = {
 
     // --- SFX SYNTHESIZERS --- //
 
-    // 1. Tiếng đấm / Đánh cận chiến
-    playAttack: function() {
+    // 1. Tiếng đấm / Đánh cận chiến (Hỗ trợ Combo 3 nốt pitch khác nhau)
+    playAttack: function(comboStep = 1) {
         if (this.isMuted) return;
         this.resumeContext();
         if (!this.ctx) return;
@@ -70,18 +70,22 @@ export const SoundSystem = {
         let osc = this.ctx.createOscillator();
         let gain = this.ctx.createGain();
         
-        osc.type = 'triangle';
-        osc.frequency.setValueAtTime(160, now);
-        osc.frequency.exponentialRampToValueAtTime(40, now + 0.1);
+        osc.type = comboStep === 3 ? 'sawtooth' : 'triangle';
+        let startFreq = comboStep === 1 ? 170 : (comboStep === 2 ? 280 : 420);
+        let endFreq = comboStep === 1 ? 45 : (comboStep === 2 ? 60 : 25);
+        let dur = comboStep === 3 ? 0.18 : 0.1;
 
-        gain.gain.setValueAtTime(0.4, now);
-        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.1);
+        osc.frequency.setValueAtTime(startFreq, now);
+        osc.frequency.exponentialRampToValueAtTime(endFreq, now + dur);
+
+        gain.gain.setValueAtTime(comboStep === 3 ? 0.6 : 0.4, now);
+        gain.gain.exponentialRampToValueAtTime(0.01, now + dur);
 
         osc.connect(gain);
         gain.connect(this.sfxGain);
 
         osc.start(now);
-        osc.stop(now + 0.1);
+        osc.stop(now + dur);
     },
 
     // 2. Tiếng bắn Ki Blast (Đạn khí)
@@ -171,30 +175,52 @@ export const SoundSystem = {
         this.playNoise(0.5, 0.4);
     },
 
-    // 5. Tiếng gồng Power Up / Aura
+    // 5. Tiếng gồng Ki Anime bộc phá (Anime DBZ Ki Charge Sound Synthesizer)
     playPowerUp: function() {
         if (this.isMuted) return;
         this.resumeContext();
         if (!this.ctx) return;
 
         let now = this.ctx.currentTime;
-        let osc = this.ctx.createOscillator();
-        let gain = this.ctx.createGain();
 
-        osc.type = 'sawtooth';
-        osc.frequency.setValueAtTime(200, now);
-        osc.frequency.linearRampToValueAtTime(450, now + 0.6);
-        osc.frequency.linearRampToValueAtTime(250, now + 1.2);
+        // Osc 1: Sub-bass Rumble (Tiếng rung gầm nền)
+        let subOsc = this.ctx.createOscillator();
+        let subGain = this.ctx.createGain();
+        subOsc.type = 'sawtooth';
+        subOsc.frequency.setValueAtTime(90, now);
+        subOsc.frequency.exponentialRampToValueAtTime(180, now + 0.6);
 
-        gain.gain.setValueAtTime(0.1, now);
-        gain.gain.linearRampToValueAtTime(0.4, now + 0.5);
-        gain.gain.exponentialRampToValueAtTime(0.01, now + 1.2);
+        subGain.gain.setValueAtTime(0.25, now);
+        subGain.gain.exponentialRampToValueAtTime(0.01, now + 0.6);
 
-        osc.connect(gain);
-        gain.connect(this.sfxGain);
+        subOsc.connect(subGain);
+        subGain.connect(this.sfxGain);
+        subOsc.start(now);
+        subOsc.stop(now + 0.6);
 
-        osc.start(now);
-        osc.stop(now + 1.2);
+        // Osc 2 & 3: High Screeching Anime Aura Whine & Yell Harmonics (Tiếng rít hào quang & tiếng gầm võ sĩ)
+        let screechOsc = this.ctx.createOscillator();
+        let screechGain = this.ctx.createGain();
+        let filter = this.ctx.createBiquadFilter();
+
+        screechOsc.type = 'sawtooth';
+        screechOsc.frequency.setValueAtTime(320, now);
+        screechOsc.frequency.linearRampToValueAtTime(680, now + 0.5);
+
+        filter.type = 'bandpass';
+        filter.frequency.setValueAtTime(500, now);
+        filter.frequency.linearRampToValueAtTime(1600, now + 0.5);
+        filter.Q.value = 5;
+
+        screechGain.gain.setValueAtTime(0.35, now);
+        screechGain.gain.exponentialRampToValueAtTime(0.01, now + 0.55);
+
+        screechOsc.connect(filter);
+        filter.connect(screechGain);
+        screechGain.connect(this.sfxGain);
+
+        screechOsc.start(now);
+        screechOsc.stop(now + 0.55);
     },
 
     // 6. Tiếng nhảy vọt (Jump)

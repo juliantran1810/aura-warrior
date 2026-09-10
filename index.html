@@ -118,9 +118,10 @@
             <button id="btnSoundToggle" onclick="SoundSystem.toggleMute()">🔊 Bật âm</button>
             <button id="btnMainMenu" onclick="UI.showConfirmMenu()">🏠 Sảnh chính</button>
 
-            <div id="questTracker">
+            <div id="questTracker" onclick="UI.toggleQuestJournal()" style="cursor: pointer;" title="Bấm để mở Bảng Nhiệm Vụ (Phím N)">
                 <h3>📜 Nhiệm vụ</h3>
                 <div id="questText">Nói chuyện Trưởng Làng</div>
+                <div id="questSubText" style="font-size: 11px; color: #ffeb3b; margin-top: 4px;">(Nhấn N mở Sổ NV)</div>
             </div>
 
             <div id="skillBar">
@@ -143,6 +144,7 @@
                 <kbd>A</kbd><kbd>D</kbd> Di chuyển &nbsp; 
                 <kbd>W</kbd> Nhảy &nbsp; 
                 <kbd>Z</kbd> Biến Hình &nbsp;
+                <kbd>N</kbd> Nhiệm vụ &nbsp;
                 <kbd>C</kbd> Trang bị &nbsp;
                 <kbd>E</kbd> Hành động &nbsp;
                 <kbd>ESC</kbd> Tạm dừng
@@ -161,6 +163,11 @@
                 <div>Chỉ số cộng thêm từ Giáp & Vũ khí:</div>
                 <div><strong>+0 DMG</strong> | <strong>+0 DEF</strong> | <strong>+0 SPD</strong></div>
             </div>
+        </div>
+
+        <div id="questJournal">
+            <div class="inv-header"><h2 style="color:#ffca28">📜 NHẬT KÝ NHIỆM VỤ</h2><button class="close-btn" onclick="UI.toggleQuestJournal()">X</button></div>
+            <div id="questJournalBody"></div>
         </div>
 
         <div id="respawnScreen">

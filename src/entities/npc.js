@@ -5,6 +5,7 @@ import { Entity } from './entity.js';
 import { CharacterRenderer } from '../renderers/characterRenderer.js';
 import { UI } from '../ui/uiManager.js';
 import { Utils } from '../utils/utils.js';
+import { QuestSystem } from '../systems/questSystem.js';
 
 export class NPC extends Entity {
     constructor(x, y) {
@@ -14,11 +15,7 @@ export class NPC extends Entity {
     }
     takeDamage() {} 
     talkTo(p) {
-        if (p.quest.step === 0) { this.showDialog('Giết 3 quái ngoài rừng!'); p.quest.step = 1; p.quest.progress = 0; }
-        else if (p.quest.step === 1) this.showDialog(`Đã diệt: ${p.quest.progress}/3`);
-        else if (p.quest.step === 2) { this.showDialog('Thưởng 100EXP, 500 Vàng!'); p.addExp(100); p.money += 500; p.quest.step = 3; }
-        else this.showDialog('Làng bình yên rồi.');
-        UI.updateQuest();
+        QuestSystem.onTalkNPC(p, this);
     }
     showDialog(t) { this.dialogText = t; this.dialogTimer = 4000; }
     update(dt) { super.update(dt); if (this.dialogTimer > 0) this.dialogTimer -= dt; }

@@ -49,9 +49,15 @@ export class Player extends Entity {
         
         this.jumpCount = 0; this.maxJumpCount = 2;
 
-        // Combat Flags
+        this.jumpCount = 0; this.maxJumpCount = 2;
+
+        // Combat & Combo Flags
         this.attackHitboxActive = false;
         this.shootFired = false;
+        this.comboStep = 1;
+        this.comboWindowTimer = 0;
+        this.comboCount = 0;
+        this.comboTimer = 0;
     }
 
     addExp(amt) {
@@ -117,18 +123,48 @@ export class Player extends Entity {
         }
         
         if (this.isChargingPower) {
-            this.vx = 0; this.powerUpTimer -= dt;
-            Utils.screenShake(2, 50);
-            if (this.powerUpTimer <= 0) {
-                this.isChargingPower = false; this.powerUpActive = true; this.powerUpTimer = 8000;
-                this.state = 'idle'; UI.showCenterMessage('SỨC MẠNH TĂNG ĐỘT BIẾN!');
-                Utils.spawnParticles(this.x + 20, this.y + 25, this.colors.aura, 50);
+            // 1. Ngắt đòn nếu bị quái vật tấn công (hurtTimer > 0)
+            if (this.hurtTimer > 0) {
+                this.isChargingPower = false;
+                this.state = 'idle';
+                if (this === GLOBALS.player) UI.chatSys('Bị ngắt Gồng Ki do bị tấn công!');
             }
-        } else if (this.powerUpActive) {
-            this.powerUpTimer -= dt;
-            this.mp = Math.min(this.maxMp, this.mp + 0.05); // Bonus Regen
-            if (this.powerUpTimer <= 0) {
-                this.powerUpActive = false; UI.chatSys('Hết trạng thái Gồng.');
+            // 2. Thả phím O để dừng gồng ki
+            else if (this === GLOBALS.player && !GLOBALS.keys['KeyO'] && (this.chargeKiTime || 0) > 300) {
+                this.isChargingPower = false;
+                this.state = 'idle';
+            } else {
+                this.chargeKiTime = (this.chargeKiTime || 0) + dt;
+                this.vx = 0; 
+                this.state = 'powerup';
+                
+                // Hồi phục MP siêu tốc + Hồi phục HP liên tục khi gồng ki mà không bị đánh
+                this.mp = Math.min(this.maxMp, this.mp + dt * 0.08); 
+                this.hp = Math.min(this.maxHp, this.hp + dt * 0.015);
+                
+                this.powerUpActive = true; 
+                this.powerUpTimer = 3000; // Giữ buff sát thương +30% khi gồng ki & 3s sau khi thả
+
+                Utils.screenShake(2.5, 60);
+                let auraColor = this.isTransformed ? '#ffeb3b' : (this.colors.aura || '#ab47bc');
+                Utils.spawnParticles(this.x + this.width / 2, this.y + this.height, auraColor, 3);
+                Utils.spawnParticles(this.x + this.width / 2 + Utils.rand(-25, 25), this.y + this.height, '#ffffff', 2);
+                
+                if (this === GLOBALS.player) UI.updateHUD();
+
+                // Lặp lại tiếng gồng ki Anime mỗi 500ms khi giữ phím O
+                if (this === GLOBALS.player && Date.now() - (this.lastPowerSoundTime || 0) > 500) {
+                    this.lastPowerSoundTime = Date.now();
+                    SoundSystem.playPowerUp();
+                }
+            }
+        } else {
+            this.chargeKiTime = 0;
+            if (this.powerUpActive) {
+                this.powerUpTimer -= dt;
+                if (this.powerUpTimer <= 0) {
+                    this.powerUpActive = false;
+                }
             }
         }
         
@@ -136,6 +172,16 @@ export class Player extends Entity {
         if (this.isGrounded) this.jumpCount = 0;
 
         for (let k in this.cooldowns) if (this.cooldowns[k] > 0) this.cooldowns[k] -= dt;
+
+        // Cập nhật bộ đếm thời gian Combo
+        if (this.comboWindowTimer > 0) {
+            this.comboWindowTimer -= dt;
+            if (this.comboWindowTimer <= 0) this.comboStep = 1;
+        }
+        if (this.comboTimer > 0) {
+            this.comboTimer -= dt;
+            if (this.comboTimer <= 0) this.comboCount = 0;
+        }
         
         if (this.skillTimer > 0) {
             this.skillTimer -= dt;
@@ -158,13 +204,19 @@ export class Player extends Entity {
             }
         }
 
-        // Sync Animation with Hitboxes
-        if (this.state === 'attack' && this.animFrame === 1 && !this.attackHitboxActive) {
+        // Sync Animation with Hitboxes & Multi-Step Hit Damage
+        if (this.state === 'attack' && (this.animFrame === 1 || this.animFrame === 0) && !this.attackHitboxActive) {
             this.attackHitboxActive = true;
-            let hitbox = { x: this.dir===1 ? this.x+this.width : this.x-30, y: this.y, width: 30, height: this.height };
+            let hitboxW = this.comboStep === 3 ? 45 : 35;
+            let hitbox = { x: this.dir===1 ? this.x+this.width : this.x-hitboxW, y: this.y - 10, width: hitboxW, height: this.height + 15 };
+            
+            let mult = this.comboStep === 1 ? 1.0 : (this.comboStep === 2 ? 1.3 : 1.8);
             GLOBALS.entities.forEach(ent => {
                 if (ent !== this && !ent.isDead && ent.hp !== undefined && !(ent instanceof NPC)) {
-                    if (Utils.checkAABB(hitbox, ent)) CombatSystem.handleAttack(this, ent, 1);
+                    if (Utils.checkAABB(hitbox, ent)) {
+                        CombatSystem.handleAttack(this, ent, mult, this.comboStep);
+                        Utils.spawnImpactBurst(ent.x + ent.width/2, ent.y + ent.height/2, this.colors.proj || '#ffca28');
+                    }
                 }
             });
         }
@@ -184,13 +236,40 @@ export class Player extends Entity {
 
     actionAttack() {
         if (this.cooldowns.attack > 0 || this.isDead || this.isChargingKame || this.isChargingPower) return false;
+        
+        // Chuỗi Combo 3 bước linh hoạt
+        if (this.comboWindowTimer > 0) {
+            this.comboStep = (this.comboStep % 3) + 1;
+        } else {
+            this.comboStep = 1;
+        }
+
         this.state = 'attack'; 
         this.animFrame = 0; 
         this.animTimer = 0;
-        this.cooldowns.attack = 350; // combo friendly
-        this.attackHitboxActive = false; // reset flag
-        if (this.isGrounded) this.vx = this.dir * 1.5; // slight step forward for better combat feel
-        if (this === GLOBALS.player) SoundSystem.playAttack();
+        this.cooldowns.attack = this.comboStep === 3 ? 350 : 220; 
+        this.comboWindowTimer = 900; // 900ms window để tiếp tục combo
+        this.attackHitboxActive = false;
+        
+        // Bước nhảy nhẹ hỗ trợ áp sát theo combo
+        if (this.isGrounded) {
+            let lungeForce = this.comboStep === 1 ? 2.5 : (this.comboStep === 2 ? 3.8 : 5.5);
+            this.vx = this.dir * lungeForce;
+            if (this.comboStep === 3) this.vy = -2.2; // Đòn hất tung Dragon Punch
+        }
+
+        // Tạo vệt chưởng kiếm / quạt gió Vòng Cung Crescent Arc
+        let arcColor = this.colors.proj || '#ffca28';
+        Utils.spawnSlashArc(
+            this.x + (this.dir === 1 ? this.width + 5 : -25),
+            this.y + (this.comboStep === 3 ? -10 : 10),
+            this.dir,
+            arcColor,
+            this.comboStep === 3 ? 1.4 : 1.0,
+            this.comboStep
+        );
+
+        if (this === GLOBALS.player) SoundSystem.playAttack(this.comboStep);
         return true;
     }
 
@@ -236,26 +315,31 @@ export class Player extends Entity {
         this.isChargingKame = true; 
         this.state = 'charge';
         this.animTimer = 0;
-        this.kameTimer = 800; 
+        this.kameTimer = 850; 
         this.cooldowns.kame = 6000;
-        Utils.spawnParticles(this.x + 20, this.y + 25, '#00bcd4', 30);
+        
+        Utils.spawnText(this.x + this.width / 2, this.y - 30, 'KAME... HAME...', '#00e5ff', true);
+        Utils.spawnParticles(this.x + (this.dir === 1 ? this.width : -10), this.y + 20, '#00e5ff', 40);
+        Utils.screenShake(6, 350);
+
         if (this === GLOBALS.player) SoundSystem.playKameCharge();
         return true;
     }
 
     actionPowerUp() {
-        if (this.cooldowns.powerUp > 0) { UI.chatSys('Power Up đang hồi.'); return false; }
-        if (this.mp < 25) { UI.chatSys('Không đủ MP.'); return false; }
-        if (this.isDead || this.isChargingKame || this.isChargingPower || this.hurtTimer > 0) return false;
+        if (this.isDead || this.isChargingKame || this.hurtTimer > 0) return false;
 
-        this.mp -= 25;
+        // Gồng Ki KHÔNG tốn MP, KHÔNG cần thời gian hồi chiêu (Giữ phím O để gồng liên tục)
         this.isChargingPower = true; 
         this.state = 'powerup';
         this.animTimer = 0;
-        this.powerUpTimer = 1500; 
-        this.cooldowns.powerUp = 12000;
-        Utils.spawnParticles(this.x + 20, this.y + 25, '#9c27b0', 30);
-        if (this === GLOBALS.player) SoundSystem.playPowerUp();
+        this.chargeKiTime = 0;
+        this.cooldowns.powerUp = 0;
+        
+        if (this === GLOBALS.player) {
+            UI.chatSys('Đang Gồng Ki... (Giữ phím O để nạp Ki & Hồi HP)');
+            SoundSystem.playPowerUp();
+        }
         return true;
     }
 
@@ -266,21 +350,24 @@ export class Player extends Entity {
 
         this.mp -= 30;
         this.isTransformed = true;
-        this.transformTimer = 14000;
+        this.transformTimer = 16000;
         this.cooldowns.transform = 20000;
 
+        Utils.screenFlash();
+        Utils.screenShake(16, 400);
+
         if (this.raceKey === 'sayan') {
-            this.baseDamage += 25; this.speed += 2.5;
-            if (this === GLOBALS.player) UI.showCenterMessage('SUPER SAIYAN 1 BỘC PHÁ!');
-            Utils.spawnParticles(this.x + 20, this.y + 25, '#ffeb3b', 60);
+            this.baseDamage += 35; this.speed += 3.5;
+            Utils.spawnEnergyPillar(this.x + this.width / 2, this.y + this.height, '#ffeb3b', 90);
+            if (this === GLOBALS.player) UI.showCenterMessage('SUPER SAIYAN BỘC PHÁ! (SỨC MẠNH TỐI THƯỢNG)');
         } else if (this.raceKey === 'namek') {
-            this.defense += 40; this.width = 56; this.height = 70;
+            this.defense += 50; this.width = 58; this.height = 72;
+            Utils.spawnEnergyPillar(this.x + this.width / 2, this.y + this.height, '#4caf50', 95);
             if (this === GLOBALS.player) UI.showCenterMessage('NAMEK KHỔNG LỒ THỨC TỈNH!');
-            Utils.spawnParticles(this.x + 20, this.y + 25, '#4caf50', 50);
         } else if (this.raceKey === 'earth') {
-            this.speed += 4.5; this.baseDamage += 15;
-            if (this === GLOBALS.player) UI.showCenterMessage('KAIO-KEN X10 BỘC PHÁ!');
-            Utils.spawnParticles(this.x + 20, this.y + 25, '#ff1744', 50);
+            this.speed += 5.0; this.baseDamage += 25;
+            Utils.spawnEnergyPillar(this.x + this.width / 2, this.y + this.height, '#ff1744', 90);
+            if (this === GLOBALS.player) UI.showCenterMessage('KAIO-KEN X20 BỘC PHÁ!');
         }
 
         if (this === GLOBALS.player) SoundSystem.playTransform();
