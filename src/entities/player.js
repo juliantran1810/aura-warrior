@@ -229,8 +229,12 @@ export class Player extends Entity {
         
         if (this.state !== 'attack' && this.state !== 'shoot' && !this.isChargingKame && !this.isChargingPower) {
             if (!this.isGrounded) this.state = 'jump';
-            else if (Math.abs(this.vx) > 0.5) this.state = 'run';
-            else this.state = 'idle';
+            else if (Math.abs(this.vx) > 0.5) {
+                this.state = 'run';
+                if (Math.random() < 0.3) {
+                    Utils.spawnParticles(this.x + (this.dir === 1 ? 5 : this.width - 5), this.y + this.height - 2, '#d7ccc8', 1);
+                }
+            } else this.state = 'idle';
         }
     }
 

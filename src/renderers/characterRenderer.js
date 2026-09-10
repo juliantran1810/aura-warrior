@@ -72,7 +72,11 @@ export const CharacterRenderer = {
         ctx.lineJoin = 'miter';
         ctx.lineCap = 'square';
 
-        if (char.hurtTimer > 0) ctx.globalAlpha = (Math.floor(Date.now() / 50) % 2 === 0) ? 0.5 : 1;
+        if (char.hurtTimer > 0) {
+            ctx.scale(1.18, 0.84); // Anime Impact Squash Deformation
+            ctx.rotate(-0.12); // Hit Knockback Tilt Angle
+            ctx.globalAlpha = (Math.floor(Date.now() / 50) % 2 === 0) ? 0.5 : 1;
+        }
         
         // I-Frame Blinking
         if (char.invincibleTimer > 0 && char.hurtTimer <= 0) {

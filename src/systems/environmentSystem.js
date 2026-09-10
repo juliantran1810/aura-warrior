@@ -3,13 +3,15 @@
    ========================================================================= */
 import { GLOBALS } from '../config/globals.js';
 import { Utils } from '../utils/utils.js';
+import { MapManager } from './mapManager.js';
 
 export const EnvironmentSystem = {
     clouds: [],
     leaves: [],
     trees: [], 
     mountains: [],
-    loginParticles: [], // Hạt bụi sảnh chính riêng biệt
+    loginParticles: [], 
+    ambientParticles: [],
 
     init: function() {
         this.clouds = [];
@@ -21,7 +23,6 @@ export const EnvironmentSystem = {
                 scale: Utils.rand(0.6, 1.6)
             });
         }
-        // Khởi tạo hạt bụi sảnh chính bay phân tán
         for (let i = 0; i < 40; i++) {
             this.loginParticles.push({
                 x: Utils.rand(0, GLOBALS.width),
@@ -38,6 +39,18 @@ export const EnvironmentSystem = {
         for (let i = 100; i < mapWidth; i += Utils.rand(300, 600)) {
             this.trees.push({ x: i, scale: Utils.rand(0.8, 1.4), type: Math.random() > 0.5 ? 1 : 2 });
         }
+        this.ambientParticles = [];
+        for (let i = 0; i < 45; i++) {
+            this.ambientParticles.push({
+                x: Utils.rand(0, mapWidth),
+                y: Utils.rand(50, GLOBALS.groundY),
+                size: Utils.rand(2, 4.5),
+                vx: Utils.rand(-0.6, 0.6),
+                vy: Utils.rand(-0.5, -0.1),
+                alpha: Utils.rand(0.3, 0.9),
+                pulse: Utils.rand(0, Math.PI * 2)
+            });
+        }
     },
 
     update: function(dt, camX) {
@@ -49,7 +62,6 @@ export const EnvironmentSystem = {
         });
         
         if (GLOBALS.state === 'LOGIN') {
-            // Cập nhật hạt bụi sảnh chính bay lên
             this.loginParticles.forEach(p => {
                 p.y += p.vy;
                 if (p.y < -10) { p.y = GLOBALS.height + 10; p.x = Utils.rand(0, GLOBALS.width); }
@@ -66,6 +78,18 @@ export const EnvironmentSystem = {
             }
             this.leaves.forEach(l => { l.x += l.vx; l.y += l.vy; l.rot += 0.05; });
             this.leaves = this.leaves.filter(l => l.y < GLOBALS.groundY + 20);
+
+            if (this.ambientParticles) {
+                let mapW = GLOBALS.mapWidth || 3000;
+                this.ambientParticles.forEach(p => {
+                    p.x += p.vx;
+                    p.y += p.vy;
+                    p.pulse += 0.04;
+                    if (p.y < 30) { p.y = GLOBALS.groundY - 10; p.x = Utils.rand(0, mapW); }
+                    if (p.x < 0) p.x = mapW;
+                    if (p.x > mapW) p.x = 0;
+                });
+            }
         }
     },
 
@@ -236,13 +260,17 @@ export const EnvironmentSystem = {
         ctx.fillStyle = mapData.groundColor; 
         ctx.fillRect(0, GLOBALS.groundY, mapData.width, 24);
 
-        // Grass Fringe (Swaying Blades)
-        ctx.fillStyle = bgType === 'namek' ? '#22d3ee' : '#81c784';
-        for (let gx = Math.max(0, camX - 50); gx < Math.min(mapData.width, camX + GLOBALS.width + 50); gx += 16) {
-            let sway = Math.sin(time / 250 + gx) * 3;
+        // Grass Fringe (Swaying Blades with Foot Bending Physics)
+        ctx.fillStyle = bgType === 'namek' ? '#22d3ee' : (bgType === 'forest' ? '#10b981' : '#81c784');
+        let p = GLOBALS.player;
+        for (let gx = Math.max(0, camX - 50); gx < Math.min(mapData.width, camX + GLOBALS.width + 50); gx += 14) {
+            let sway = Math.sin(time / 250 + gx * 0.05) * 3;
+            let playerDist = p ? Math.abs((p.x + p.width/2) - gx) : 999;
+            let footBend = playerDist < 35 ? (gx < (p.x + p.width/2) ? -7 : 7) : 0;
+            
             ctx.beginPath();
             ctx.moveTo(gx, GLOBALS.groundY);
-            ctx.lineTo(gx + 4 + sway, GLOBALS.groundY - 8);
+            ctx.lineTo(gx + 4 + sway + footBend, GLOBALS.groundY - 10);
             ctx.lineTo(gx + 8, GLOBALS.groundY);
             ctx.fill();
         }
@@ -499,12 +527,54 @@ export const EnvironmentSystem = {
 
     drawParticles: function(ctx, camX, camY) {
         ctx.save(); ctx.translate(-camX, -camY);
-        if (GLOBALS.state === 'LOGIN') return;
-        ctx.fillStyle = '#388e3c';
+        if (GLOBALS.state === 'LOGIN') { ctx.restore(); return; }
+
+        let currentMap = MapManager.maps[MapManager.currentId];
+        let bgType = currentMap ? currentMap.bgType : 'village';
+
+        // 1. Lá cây rơi
+        ctx.fillStyle = bgType === 'forest' ? '#10b981' : '#388e3c';
         this.leaves.forEach(l => {
             ctx.save(); ctx.translate(l.x, l.y); ctx.rotate(l.rot);
             ctx.fillRect(-4, -2, 8, 4); ctx.restore();
         });
+
+        // 2. Hạt đom đốm & bào tử phát sáng
+        if (this.ambientParticles) {
+            this.ambientParticles.forEach(ap => {
+                if (ap.x < camX - 100 || ap.x > camX + GLOBALS.width + 100) return;
+                
+                let alpha = (Math.sin(ap.pulse) * 0.35 + 0.65);
+                ctx.save();
+                
+                if (bgType === 'forest') {
+                    // Đom đốm xanh lá
+                    ctx.fillStyle = `rgba(118, 255, 3, ${alpha})`;
+                    ctx.shadowColor = '#76ff03';
+                    ctx.shadowBlur = 8;
+                    ctx.beginPath(); ctx.arc(ap.x, ap.y, ap.size, 0, Math.PI * 2); ctx.fill();
+                } else if (bgType === 'namek') {
+                    // Bào tử năng lượng Namek
+                    ctx.fillStyle = `rgba(45, 212, 191, ${alpha})`;
+                    ctx.shadowColor = '#2dd4bf';
+                    ctx.shadowBlur = 10;
+                    ctx.beginPath(); ctx.arc(ap.x, ap.y, ap.size, 0, Math.PI * 2); ctx.fill();
+                } else if (bgType === 'arena') {
+                    // Tàn tro lửa hoàng hôn
+                    ctx.fillStyle = `rgba(255, 87, 34, ${alpha})`;
+                    ctx.shadowColor = '#ff5722';
+                    ctx.shadowBlur = 6;
+                    ctx.beginPath(); ctx.arc(ap.x, ap.y, ap.size * 0.8, 0, Math.PI * 2); ctx.fill();
+                } else {
+                    // Phấn hoa anh đào
+                    ctx.fillStyle = `rgba(255, 128, 171, ${alpha})`;
+                    ctx.beginPath(); ctx.arc(ap.x, ap.y, ap.size * 0.8, 0, Math.PI * 2); ctx.fill();
+                }
+                
+                ctx.restore();
+            });
+        }
+
         ctx.restore();
     }
 };

@@ -89,9 +89,9 @@ export const QUESTS_DB = [
 ];
 
 export const QuestSystem = {
-    initPlayerQuest: function(player) {
+    initPlayerQuest: function (player) {
         if (!player) return;
-        
+
         // Auto-migration for legacy saves
         if (!player.quest || typeof player.quest.step === 'number') {
             let legacyStep = (player.quest && typeof player.quest.step === 'number') ? player.quest.step : 0;
@@ -113,16 +113,16 @@ export const QuestSystem = {
         }
     },
 
-    getQuest: function(questId) {
+    getQuest: function (questId) {
         return QUESTS_DB.find(q => q.id === questId) || null;
     },
 
-    getCurrentQuest: function(player) {
+    getCurrentQuest: function (player) {
         this.initPlayerQuest(player);
         return this.getQuest(player.quest.currentId);
     },
 
-    onKillTarget: function(player, target) {
+    onKillTarget: function (player, target) {
         if (!player || !target || player.isDead) return;
         this.initPlayerQuest(player);
 
@@ -148,7 +148,7 @@ export const QuestSystem = {
         }
     },
 
-    onTalkNPC: function(player, npc) {
+    onTalkNPC: function (player, npc) {
         this.initPlayerQuest(player);
         let q = this.getCurrentQuest(player);
 
@@ -179,7 +179,7 @@ export const QuestSystem = {
         npc.showDialog('Làng bình yên rồi, chúc ngươi luyện võ tốt!');
     },
 
-    claimReward: function(player) {
+    claimReward: function (player) {
         this.initPlayerQuest(player);
         let q = this.getCurrentQuest(player);
         if (!q || player.quest.status !== 'READY_TO_CLAIM') return;
@@ -222,7 +222,7 @@ export const QuestSystem = {
         UI.updateInventoryUI();
     },
 
-    updateUI: function() {
+    updateUI: function () {
         let p = GLOBALS.player; if (!p) return;
         this.initPlayerQuest(p);
 
@@ -252,7 +252,7 @@ export const QuestSystem = {
         }
     },
 
-    renderJournalModal: function(player, container) {
+    renderJournalModal: function (player, container) {
         this.initPlayerQuest(player);
         let currentQ = this.getCurrentQuest(player);
         let completedIds = player.quest.completedQuests || [];
@@ -287,9 +287,9 @@ export const QuestSystem = {
                             <span>⭐ +${currentQ.reward.exp} EXP</span>
                             <span>🪙 +${currentQ.reward.money} Vàng</span>
                             ${currentQ.reward.items ? currentQ.reward.items.map(it => {
-                                let db = ITEMS_DB[it.id];
-                                return `<span>${db ? db.icon : '📦'} ${it.count}x ${db ? db.name : it.id}</span>`;
-                            }).join('') : ''}
+                let db = ITEMS_DB[it.id];
+                return `<span>${db ? db.icon : '📦'} ${it.count}x ${db ? db.name : it.id}</span>`;
+            }).join('') : ''}
                         </div>
                     </div>
 
